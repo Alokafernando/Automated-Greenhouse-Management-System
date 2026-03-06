@@ -5,6 +5,13 @@
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/service-registry/service-registry/pom.xml" />
+        <option value="$PROJECT_DIR$/api-gateway/pom.xml" />
+        <option value="$PROJECT_DIR$/config-server/pom.xml" />
+        <option value="$PROJECT_DIR$/service-registry/pom.xml" />
+        <option value="$PROJECT_DIR$/zone-management-service/pom.xml" />
+        <option value="$PROJECT_DIR$/sensor-telemetry-service/pom.xml" />
+        <option value="$PROJECT_DIR$/automation-service/pom.xml" />
+        <option value="$PROJECT_DIR$/crop-inventory-service/pom.xml" />
       </list>
     </option>
   </component>
