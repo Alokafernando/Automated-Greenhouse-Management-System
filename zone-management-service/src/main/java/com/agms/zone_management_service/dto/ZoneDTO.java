@@ -1,0 +1,18 @@
+package com.agms.zone_management_service.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class ZoneDTO {
+    private String name;
+    private double minTemp;
+    private double maxTemp;
+    private double minHumidity;
+    private double maxHumidity;
+}
