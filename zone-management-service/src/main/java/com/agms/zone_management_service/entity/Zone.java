@@ -9,11 +9,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+@Entity
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Entity
 public class Zone {
 
     @Id
@@ -23,8 +23,11 @@ public class Zone {
     private String name;
 
     private double minTemp;
+
     private double maxTemp;
 
     private String deviceId;
+
+    private String userId;
 
 }

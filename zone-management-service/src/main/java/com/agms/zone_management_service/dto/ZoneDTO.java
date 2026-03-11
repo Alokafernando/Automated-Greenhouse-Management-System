@@ -10,7 +10,12 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ZoneDTO {
+
+    private Long id;
     private String name;
     private double minTemp;
     private double maxTemp;
+    private String deviceId;
+    private String userId;
+
 }

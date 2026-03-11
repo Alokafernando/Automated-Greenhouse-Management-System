@@ -1,83 +1,91 @@
 package com.agms.zone_management_service.service.impl;
 
-import com.agms.zone_management_service.client.IoTIntegrationClient;
-
+import com.agms.zone_management_service.client.SensorClient;
 import com.agms.zone_management_service.dto.ZoneDTO;
 import com.agms.zone_management_service.entity.Zone;
 import com.agms.zone_management_service.repository.ZoneRepository;
 import com.agms.zone_management_service.service.ZoneService;
-import feign.FeignException;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class ZoneServiceImpl implements ZoneService {
 
     private final ZoneRepository zoneRepository;
-    private final IoTIntegrationClient iotClient;
+    private final SensorClient sensorClient;
+    private final ModelMapper modelMapper;
 
     public ZoneServiceImpl(ZoneRepository zoneRepository,
-                           IoTIntegrationClient iotClient) {
+                           SensorClient sensorClient,
+                           ModelMapper modelMapper) {
         this.zoneRepository = zoneRepository;
-        this.iotClient = iotClient;
+        this.sensorClient = sensorClient;
+        this.modelMapper = modelMapper;
     }
 
     @Override
-    public Zone createZone(ZoneDTO dto) {
+    public Zone createZone(ZoneDTO zoneDTO) {
 
-        if(dto.getMinTemp() >= dto.getMaxTemp()){
-            throw new RuntimeException("minTemp must be less than maxTemp");
-        }
+        if (zoneDTO.getName() == null || zoneDTO.getName().isEmpty())
+            throw new IllegalArgumentException("Zone name cannot be null or empty");
 
-        String deviceId;
-        try {
-            Map<String,String> response = iotClient.registerDevice();
-            deviceId = response.get("deviceId");
-            if(deviceId == null || deviceId.isEmpty()){
-                throw new RuntimeException("IoT service returned invalid deviceId");
-            }
-        } catch (FeignException e) {
-            throw new RuntimeException("IoT service unavailable. Cannot register device.", e);
-        }
+        if (zoneDTO.getMinTemp() >= zoneDTO.getMaxTemp())
+            throw new IllegalArgumentException("minTemp must be less than maxTemp");
 
-        Zone zone = new Zone();
-        zone.setName(dto.getName());
-        zone.setMinTemp(dto.getMinTemp());
-        zone.setMaxTemp(dto.getMaxTemp());
-        zone.setMinHumidity(dto.getMinHumidity());
-        zone.setMaxHumidity(dto.getMaxHumidity());
-        zone.setDeviceId(deviceId);
+        String zoneId = UUID.randomUUID().toString();
 
+        Map<String, Object> deviceRequest = new HashMap<>();
+        deviceRequest.put("name", zoneDTO.getName() + "-Sensor");
+        deviceRequest.put("zoneId", zoneId);
+
+        Map<String, Object> deviceResponse = sensorClient.registerDevice(deviceRequest);
+
+        zoneDTO.setDeviceId((String) deviceResponse.get("deviceId"));
+        zoneDTO.setUserId((String) deviceResponse.get("userId"));
+
+        Zone zone = modelMapper.map(zoneDTO, Zone.class);
         return zoneRepository.save(zone);
     }
 
     @Override
     public Zone getZoneById(Long id) {
         return zoneRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Zone not found"));
+                .orElseThrow(() -> new RuntimeException("Zone not found with ID: " + id));
     }
 
     @Override
-    public Zone updateZone(Long id, ZoneDTO dto) {
-
+    public Zone updateZone(Long id, ZoneDTO zoneDTO) {
         Zone zone = zoneRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Zone not found"));
+                .orElseThrow(() -> new RuntimeException("Zone not found with ID: " + id));
 
-        if(dto.getMinTemp() >= dto.getMaxTemp()){
-            throw new RuntimeException("minTemp must be less than maxTemp");
-        }
+        if (zoneDTO.getMinTemp() >= zoneDTO.getMaxTemp())
+            throw new IllegalArgumentException("minTemp must be less than maxTemp");
 
-        zone.setMinTemp(dto.getMinTemp());
-        zone.setMaxTemp(dto.getMaxTemp());
-        zone.setMinHumidity(dto.getMinHumidity());
-        zone.setMaxHumidity(dto.getMaxHumidity());
+        zone.setName(zoneDTO.getName());
+        zone.setMinTemp(zoneDTO.getMinTemp());
+        zone.setMaxTemp(zoneDTO.getMaxTemp());
+        zone.setDeviceId(zoneDTO.getDeviceId());
 
         return zoneRepository.save(zone);
     }
 
     @Override
     public void deleteZone(Long id) {
+        if (!zoneRepository.existsById(id))
+            throw new RuntimeException("Zone not found with ID: " + id);
+
         zoneRepository.deleteById(id);
+    }
+
+    @Override
+    public List<ZoneDTO> findAll() {
+        return zoneRepository.findAll().stream()
+                .map(zone -> modelMapper.map(zone, ZoneDTO.class))
+                .toList();
     }
 }
