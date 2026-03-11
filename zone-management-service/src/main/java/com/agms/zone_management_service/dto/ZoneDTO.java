@@ -13,6 +13,4 @@ public class ZoneDTO {
     private String name;
     private double minTemp;
     private double maxTemp;
-    private double minHumidity;
-    private double maxHumidity;
 }

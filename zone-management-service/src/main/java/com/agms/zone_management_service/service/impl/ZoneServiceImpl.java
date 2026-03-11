@@ -6,6 +6,7 @@ import com.agms.zone_management_service.dto.ZoneDTO;
 import com.agms.zone_management_service.entity.Zone;
 import com.agms.zone_management_service.repository.ZoneRepository;
 import com.agms.zone_management_service.service.ZoneService;
+import feign.FeignException;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -29,11 +30,18 @@ public class ZoneServiceImpl implements ZoneService {
             throw new RuntimeException("minTemp must be less than maxTemp");
         }
 
-        Map<String,String> response = iotClient.registerDevice();
-        String deviceId = response.get("deviceId");
+        String deviceId;
+        try {
+            Map<String,String> response = iotClient.registerDevice();
+            deviceId = response.get("deviceId");
+            if(deviceId == null || deviceId.isEmpty()){
+                throw new RuntimeException("IoT service returned invalid deviceId");
+            }
+        } catch (FeignException e) {
+            throw new RuntimeException("IoT service unavailable. Cannot register device.", e);
+        }
 
         Zone zone = new Zone();
-
         zone.setName(dto.getName());
         zone.setMinTemp(dto.getMinTemp());
         zone.setMaxTemp(dto.getMaxTemp());
