@@ -10,6 +10,7 @@
         <module name="crop-inventory-service" />
         <module name="config-server" />
         <module name="automation-service" />
+        <module name="auth-service" />
         <module name="api-gateway" />
         <module name="zone-management-service" />
         <module name="service-registry" />
@@ -19,6 +20,7 @@
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="api-gateway" options="-parameters" />
+      <module name="auth-service" options="-parameters" />
       <module name="automation-service" options="-parameters" />
       <module name="config-server" options="-parameters" />
       <module name="crop-inventory-service" options="-parameters" />
