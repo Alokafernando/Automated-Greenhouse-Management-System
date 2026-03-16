@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 import java.util.List;
 
-@FeignClient(name = "zone-service")
-public interface ExternalIoTClient {
+@FeignClient(name = "ZONE-MANAGEMENT-SERVICE")
+public interface ZoneClient {
 
     @GetMapping("/api/zones")
     List<ZoneDTO> getAllZones();

@@ -1,13 +1,17 @@
 package com.agms.sensor_telemetry_service.service;
 
 import com.agms.sensor_telemetry_service.dto.DeviceDTO;
-import com.agms.sensor_telemetry_service.dto.ZoneDTO;
-
-import java.util.List;
+import com.agms.sensor_telemetry_service.dto.SensorTelemetryDTO;
 
 public interface SensorService {
 
-    void processTelemetry(com.agms.sensor_service.dto.SensorTelemetryDTO telemetryDTO);
+    void login();
 
-    List<ZoneDTO> getAllZones();
+    String getAccessToken();
+
+    void refreshAccessToken();
+
+    DeviceDTO registerDeviceAtExternalApi(DeviceDTO deviceDTO);
+
+    SensorTelemetryDTO fetchTelemetryFromExternal(String deviceId);
 }

@@ -16,6 +16,5 @@ public class ZoneDTO {
     private double minTemp;
     private double maxTemp;
     private String deviceId;
-    private String userId;
 
 }

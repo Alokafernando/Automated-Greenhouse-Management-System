@@ -1,39 +1,50 @@
 package com.agms.sensor_telemetry_service.scheduledfetcher;
 
-import com.agms.sensor_telemetry_service.Model.Telemetry;
 import com.agms.sensor_telemetry_service.client.AutomationClient;
-import com.agms.sensor_telemetry_service.client.ExternalIoTClient;
+import com.agms.sensor_telemetry_service.client.ZoneClient;
+import com.agms.sensor_telemetry_service.dto.SensorTelemetryDTO;
+import com.agms.sensor_telemetry_service.dto.ZoneDTO;
+import com.agms.sensor_telemetry_service.service.SensorService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
+@Slf4j
 public class SensorFetcher {
 
-    private final ExternalIoTClient externalIoTClient;
+    private final ZoneClient zoneClient; // Renamed Feign Client
+    private final SensorService sensorService;
     private final AutomationClient automationClient;
 
-    private volatile Telemetry latestTelemetry;
-
-    public SensorFetcher(ExternalIoTClient externalIoTClient, AutomationClient automationClient) {
-        this.externalIoTClient = externalIoTClient;
+    public SensorFetcher(ZoneClient zoneClient, SensorService sensorService, AutomationClient automationClient) {
+        this.zoneClient = zoneClient;
+        this.sensorService = sensorService;
         this.automationClient = automationClient;
     }
 
-    // Runs every 10 seconds
     @Scheduled(fixedRate = 10000)
     public void fetchAndPushTelemetry() {
-        String deviceId = "b751b8c9-644a-484c-ba3f-be63f9b27ad0";
-        String token = "your-access-token"; // Replace with actual JWT/token logic
+        try {
+            // 1. Get all zones to find active device IDs
+            List<ZoneDTO> zones = zoneClient.getAllZones();
 
-        externalIoTClient.fetchTelemetry(deviceId, token)  // <-- call the method properly
-                .doOnNext(telemetry -> {
-                    this.latestTelemetry = telemetry;        // store latest for debug
-                    automationClient.sendDataToBrain(telemetry); // push to automation service
-                })
-                .subscribe(); // reactive subscription
-    }
+            for (ZoneDTO zone : zones) {
+                if (zone.getDeviceId() != null) {
+                    // 2. Fetch data from real IoT API via our Service
+                    SensorTelemetryDTO data = sensorService.fetchTelemetryFromExternal(zone.getDeviceId());
 
-    public Telemetry getLatestTelemetry() {
-        return latestTelemetry;
+                    if (data != null) {
+                        // 3. Push to Automation Service
+                        automationClient.processTelemetry(data);
+                        log.info("Pushed data for Zone: {} - Temp: {}", zone.getName(), data.getTemperature());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Scheduled Fetch Failed: " + e.getMessage());
+        }
     }
 }
