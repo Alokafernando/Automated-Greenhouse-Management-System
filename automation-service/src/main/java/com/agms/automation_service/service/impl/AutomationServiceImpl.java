@@ -1,62 +1,82 @@
 package com.agms.automation_service.service.impl;
 
+import com.agms.automation_service.client.ZoneClient;
 import com.agms.automation_service.dto.ActionResponseDTO;
 import com.agms.automation_service.dto.SensorDataDTO;
+import com.agms.automation_service.dto.ZoneThresholdDTO;
+import com.agms.automation_service.entity.AutomationLog;
+import com.agms.automation_service.repository.AutomationLogRepository;
 import com.agms.automation_service.service.AutomationService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class AutomationServiceImpl implements AutomationService {
 
-    @Value("${automation.thresholds.temperature:30.0}")
-    private double tempThreshold;
-
-    @Value("${automation.thresholds.humidity:60.0}")
-    private double humidityThreshold;
+    private final ZoneClient zoneClient;
+    private final AutomationLogRepository logRepository;
 
     @Override
     public ActionResponseDTO evaluateTelemetry(SensorDataDTO data) {
-        log.info("Evaluating data for Sensor: {} | Type: {} | Value: {}",
-                data.getSensorId(), data.getSensorType(), data.getValue());
+        log.info("Processing data for Sensor: {} in Zone: {}", data.getSensorId(), data.getZoneId());
+
+        // Using the getZoneById method from your updated ZoneClient
+        ZoneThresholdDTO thresholds = zoneClient.getZoneById(data.getZoneId());
 
         ActionResponseDTO response = new ActionResponseDTO();
         response.setSensorId(data.getSensorId());
         response.setProcessedAt(LocalDateTime.now());
 
         if ("TEMPERATURE".equalsIgnoreCase(data.getSensorType())) {
-            if (data.getValue() > tempThreshold) {
-                response.setAction("ACTIVATE_COOLING");
-                response.setStatus("CRITICAL");
-                response.setMessage("Temperature " + data.getValue() + "C exceeds threshold of " + tempThreshold + "C");
-            } else {
-                response.setAction("NO_ACTION");
-                response.setStatus("NORMAL");
-                response.setMessage("Temperature is within safe limits.");
-            }
-        }
-        else if ("HUMIDITY".equalsIgnoreCase(data.getSensorType())) {
-            if (data.getValue() > humidityThreshold) {
-                response.setAction("ACTIVATE_DEHUMIDIFIER");
-                response.setStatus("WARNING");
-                response.setMessage("Humidity level " + data.getValue() + "% is too high.");
-            } else {
-                response.setAction("NO_ACTION");
-                response.setStatus("NORMAL");
-                response.setMessage("Humidity level stable.");
-            }
-        }
-        else {
-            response.setAction("MONITORING");
-            response.setStatus("UNKNOWN_TYPE");
-            response.setMessage("Sensor type not recognized for automation rules.");
+            processTemperatureRules(data.getValue(), thresholds, response);
+        } else {
+            response.setAction("NO_ACTION");
+            response.setStatus("NORMAL");
+            response.setMessage("Monitoring sensor type: " + data.getSensorType());
         }
 
-        log.info("Decision: {} for Sensor: {}", response.getAction(), data.getSensorId());
+        saveToLog(data, response);
+
         return response;
+    }
+
+    private void processTemperatureRules(double currentVal, ZoneThresholdDTO limits, ActionResponseDTO res) {
+        if (currentVal > limits.getMaxTemp()) {
+            res.setAction("TURN_FAN_ON");
+            res.setStatus("CRITICAL");
+            res.setMessage("Temp (" + currentVal + "°C) exceeded Max (" + limits.getMaxTemp() + "°C)");
+        }
+        else if (currentVal < limits.getMinTemp()) {
+            res.setAction("TURN_HEATER_ON");
+            res.setStatus("CRITICAL");
+            res.setMessage("Temp (" + currentVal + "°C) below Min (" + limits.getMinTemp() + "°C)");
+        }
+        else {
+            res.setAction("STABLE");
+            res.setStatus("NORMAL");
+            res.setMessage("Temperature within optimal range.");
+        }
+    }
+
+    private void saveToLog(SensorDataDTO data, ActionResponseDTO response) {
+        AutomationLog logEntry = new AutomationLog();
+        logEntry.setSensorId(data.getSensorId());
+        logEntry.setAction(response.getAction());
+        logEntry.setStatus(response.getStatus());
+        logEntry.setMessage(response.getMessage());
+        logEntry.setTimestamp(LocalDateTime.now());
+
+        logRepository.save(logEntry);
+        log.info("Log saved: {} for Sensor {}", response.getAction(), data.getSensorId());
+    }
+
+    public List<AutomationLog> getAllLogs() {
+        return logRepository.findAllByOrderByTimestampDesc();
     }
 }
