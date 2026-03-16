@@ -15,7 +15,7 @@ import java.util.List;
 @Slf4j
 public class SensorFetcher {
 
-    private final ZoneClient zoneClient; // Renamed Feign Client
+    private final ZoneClient zoneClient;
     private final SensorService sensorService;
     private final AutomationClient automationClient;
 
@@ -25,26 +25,40 @@ public class SensorFetcher {
         this.automationClient = automationClient;
     }
 
-    @Scheduled(fixedRate = 10000)
+    /**
+     * initialDelay = 20000 (20 seconds) gives the Load Balancer
+     * enough time to fetch the registry from Eureka before the first call.
+     */
+    @Scheduled(fixedRate = 10000, initialDelay = 20000)
     public void fetchAndPushTelemetry() {
         try {
+            log.debug("Starting scheduled telemetry fetch...");
+
             // 1. Get all zones to find active device IDs
             List<ZoneDTO> zones = zoneClient.getAllZones();
 
+            if (zones == null || zones.isEmpty()) {
+                log.warn("No zones found to fetch telemetry for.");
+                return;
+            }
+
             for (ZoneDTO zone : zones) {
                 if (zone.getDeviceId() != null) {
-                    // 2. Fetch data from real IoT API via our Service
+                    // 2. Fetch data from real IoT API
                     SensorTelemetryDTO data = sensorService.fetchTelemetryFromExternal(zone.getDeviceId());
 
                     if (data != null) {
                         // 3. Push to Automation Service
                         automationClient.processTelemetry(data);
-                        log.info("Pushed data for Zone: {} - Temp: {}", zone.getName(), data.getTemperature());
+                        log.info("Pushed data for Zone: {} (ID: {}) - Temp: {}°C",
+                                zone.getName(), zone.getDeviceId(), data.getTemperature());
                     }
                 }
             }
+        } catch (feign.RetryableException e) {
+            log.error("Target service (ZONE-SERVICE) is currently unavailable. Retrying in next cycle...");
         } catch (Exception e) {
-            log.error("Scheduled Fetch Failed: " + e.getMessage());
+            log.error("Scheduled Fetch Failed: {}", e.getMessage());
         }
     }
 }
