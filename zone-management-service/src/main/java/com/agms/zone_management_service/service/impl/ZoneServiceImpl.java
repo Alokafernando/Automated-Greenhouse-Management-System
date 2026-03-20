@@ -1,91 +1,173 @@
 package com.agms.zone_management_service.service.impl;
 
-import com.agms.zone_management_service.client.SensorClient;
+import com.agms.zone_management_service.dto.DeviceRequestDTO;
+import com.agms.zone_management_service.dto.DeviceResponseDTO;
 import com.agms.zone_management_service.dto.ZoneDTO;
+import com.agms.zone_management_service.dto.ZoneResponseDTO;
 import com.agms.zone_management_service.entity.Zone;
 import com.agms.zone_management_service.repository.ZoneRepository;
 import com.agms.zone_management_service.service.ZoneService;
-import org.modelmapper.ModelMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class ZoneServiceImpl implements ZoneService {
 
-    private final ZoneRepository zoneRepository;
-    private final SensorClient sensorClient;
-    private final ModelMapper modelMapper;
+    @Autowired
+    private ZoneRepository repository;
 
-    public ZoneServiceImpl(ZoneRepository zoneRepository,
-                           SensorClient sensorClient,
-                           ModelMapper modelMapper) {
-        this.zoneRepository = zoneRepository;
-        this.sensorClient = sensorClient;
-        this.modelMapper = modelMapper;
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Value("${external.iot.base-url}")
+    private String baseUrl;         // http://104.211.95.241:8080/api
+
+    @Value("${auth.service.base-url}")
+    private String authBaseUrl;     // http://localhost:8085/api
+
+    @Value("${external.iot.username}")
+    private String iotUsername;
+
+    @Value("${external.iot.password}")
+    private String iotPassword;
+
+    @Override
+    public ZoneResponseDTO createZone(ZoneDTO dto) {
+        if (dto.getMinTemp() >= dto.getMaxTemp()) {
+            throw new RuntimeException("Invalid temperature range: minTemp must be less than maxTemp");
+        }
+
+        // ✅ TEMPORARY: IoT API auth is broken (returns 500 on /auth/login)
+        // Accept deviceId directly in the request body instead
+        if (dto.getDeviceId() == null || dto.getDeviceId().isBlank()) {
+            throw new RuntimeException("deviceId is required (IoT API unavailable)");
+        }
+
+        Zone zone = Zone.builder()
+                .name(dto.getName())
+                .minTemp(dto.getMinTemp())
+                .maxTemp(dto.getMaxTemp())
+                .minHumidity(dto.getMinHumidity())   // ✅ add
+                .maxHumidity(dto.getMaxHumidity())   // ✅ add
+                .deviceId(dto.getDeviceId())
+                .build();
+
+        Zone saved = repository.save(zone);
+        log.info("✅ Zone created: {} with deviceId: {}", saved.getName(), saved.getDeviceId());
+        return toResponseDTO(saved);
     }
 
     @Override
-    public Zone createZone(ZoneDTO zoneDTO) {
-
-        if (zoneDTO.getName() == null || zoneDTO.getName().isEmpty())
-            throw new IllegalArgumentException("Zone name cannot be null or empty");
-
-        if (zoneDTO.getMinTemp() >= zoneDTO.getMaxTemp())
-            throw new IllegalArgumentException("minTemp must be less than maxTemp");
-
-        String zoneId = UUID.randomUUID().toString();
-
-        Map<String, Object> deviceRequest = new HashMap<>();
-        deviceRequest.put("name", zoneDTO.getName() + "-Sensor");
-        deviceRequest.put("zoneId", zoneId);
-
-        Map<String, Object> deviceResponse = sensorClient.registerDevice(deviceRequest);
-
-        zoneDTO.setDeviceId((String) deviceResponse.get("deviceId"));
-        zoneDTO.setUserId((String) deviceResponse.get("userId"));
-
-        Zone zone = modelMapper.map(zoneDTO, Zone.class);
-        return zoneRepository.save(zone);
+    public ZoneResponseDTO getZone(Long id) {
+        Zone zone = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Zone not found: " + id));
+        return toResponseDTO(zone);
     }
 
     @Override
-    public Zone getZoneById(Long id) {
-        return zoneRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Zone not found with ID: " + id));
-    }
+    public ZoneResponseDTO updateZone(Long id, ZoneDTO dto) {
+        Zone zone = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Zone not found: " + id));
 
-    @Override
-    public Zone updateZone(Long id, ZoneDTO zoneDTO) {
-        Zone zone = zoneRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Zone not found with ID: " + id));
+        if (dto.getMinTemp() >= dto.getMaxTemp()) {
+            throw new RuntimeException("Invalid temperature range");
+        }
 
-        if (zoneDTO.getMinTemp() >= zoneDTO.getMaxTemp())
-            throw new IllegalArgumentException("minTemp must be less than maxTemp");
+        zone.setName(dto.getName());
+        zone.setMinTemp(dto.getMinTemp());
+        zone.setMaxTemp(dto.getMaxTemp());
 
-        zone.setName(zoneDTO.getName());
-        zone.setMinTemp(zoneDTO.getMinTemp());
-        zone.setMaxTemp(zoneDTO.getMaxTemp());
-        zone.setDeviceId(zoneDTO.getDeviceId());
+        if (dto.getDeviceId() != null && !dto.getDeviceId().isBlank()) {
+            zone.setDeviceId(dto.getDeviceId());
+        }
 
-        return zoneRepository.save(zone);
+        return toResponseDTO(repository.save(zone));
     }
 
     @Override
     public void deleteZone(Long id) {
-        if (!zoneRepository.existsById(id))
-            throw new RuntimeException("Zone not found with ID: " + id);
-
-        zoneRepository.deleteById(id);
+        repository.deleteById(id);
     }
 
     @Override
-    public List<ZoneDTO> findAll() {
-        return zoneRepository.findAll().stream()
-                .map(zone -> modelMapper.map(zone, ZoneDTO.class))
-                .toList();
+    public List<ZoneResponseDTO> getAllZones() {
+        return repository.findAll()
+                .stream()
+                .map(this::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    // ✅ Gets token from EXTERNAL IoT API — used for device registration
+    private String getIoTToken() {
+        return fetchToken(baseUrl + "/auth/login", iotUsername, iotPassword);
+    }
+
+    // ✅ Gets token from LOCAL auth service — available if needed for local ops
+    private String getLocalToken() {
+        return fetchToken(authBaseUrl + "/auth/login", "root", "1234");
+    }
+
+    private String fetchToken(String loginUrl, String username, String password) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        String body = """
+                {
+                  "username": "%s",
+                  "password": "%s"
+                }
+                """.formatted(username, password);
+
+        HttpEntity<String> entity = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(loginUrl, entity, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                JsonNode root = objectMapper.readTree(response.getBody());
+
+                JsonNode tokenNode = root.path("data").path("accessToken");
+                if (tokenNode.isMissingNode()) {
+                    tokenNode = root.path("accessToken");
+                }
+
+                if (tokenNode.isMissingNode() || tokenNode.isNull()) {
+                    throw new RuntimeException("accessToken not found in response from: " + loginUrl);
+                }
+
+                log.info("✅ Login successful: {}", loginUrl);
+                return tokenNode.asText();
+            } else {
+                throw new RuntimeException("Login returned status: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("❌ Login failed [{}]: {}", loginUrl, e.getMessage());
+            throw new RuntimeException("Could not authenticate at: " + loginUrl, e);
+        }
+    }
+
+    private ZoneResponseDTO toResponseDTO(Zone zone) {
+        return new ZoneResponseDTO(
+                zone.getId(),
+                zone.getName(),
+                zone.getMinTemp(),
+                zone.getMaxTemp(),
+                zone.getMinHumidity(),   // ✅ add
+                zone.getMaxHumidity(),
+                zone.getDeviceId()
+        );
     }
 }

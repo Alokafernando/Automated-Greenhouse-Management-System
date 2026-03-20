@@ -7,10 +7,8 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ApiResponse {
-
-    private int status;
-    private String message;
-    private Object object;
-
+public class DeviceResponseDTO {
+    private String deviceId;
+    private String name;
+    private String zoneId;
 }

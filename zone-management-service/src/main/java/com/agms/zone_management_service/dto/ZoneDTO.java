@@ -1,21 +1,13 @@
 package com.agms.zone_management_service.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
+@Data
 public class ZoneDTO {
-
-    private Long id;
     private String name;
     private double minTemp;
     private double maxTemp;
+    private double minHumidity;   // ✅ add
+    private double maxHumidity;
     private String deviceId;
-    private String userId;
-
 }

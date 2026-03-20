@@ -1,109 +1,171 @@
 package com.agms.sensor_telemetry_service.service.impl;
 
 import com.agms.sensor_telemetry_service.dto.DeviceDTO;
-import com.agms.sensor_telemetry_service.dto.SensorTelemetryDTO;
 import com.agms.sensor_telemetry_service.service.SensorService;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
 public class SensorServiceImpl implements SensorService {
 
-    private final RestTemplate restTemplate;
-    private String cachedToken;
+    @Autowired
+    private RestTemplate restTemplate;
 
-    private final Map<String, SensorTelemetryDTO> latestReadings = new ConcurrentHashMap<>();
+    // ── External IoT API ──────────────────────────────
+    @Value("${external.iot.base-url}")
+    private String iotBaseUrl;
 
-    @Value("${external.iot.base-url:http://104.211.95.241:8080/api}")
-    private String baseUrl;
+    @Value("${external.iot.username}")
+    private String iotUsername;        // buddhika
 
-    @Value("${external.iot.username:root}")
-    private String username;
+    @Value("${external.iot.password}")
+    private String iotPassword;        // 1234
 
-    @Value("${external.iot.password:1234}")
-    private String password;
+    // ── Local Auth Service ────────────────────────────
+    @Value("${auth.service.base-url}")
+    private String authBaseUrl;
 
-    public SensorServiceImpl(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
-    }
+    // ✅ FIX: Separate credentials for local auth service
+    @Value("${auth.service.username}")
+    private String authUsername;       // buddhika (local)
 
-    @PostConstruct
-    public void init() {
-        login(); // Get token on startup
+    @Value("${auth.service.password}")
+    private String authPassword;       // 1234 (local)
+
+    private String accessToken;
+    private String refreshToken;
+
+    private static final int MAX_RETRIES = 3;
+
+    // ================= EXTERNAL IOT OPERATIONS =================
+
+    @Override
+    public DeviceDTO registerDeviceAtExternalApi(DeviceDTO deviceDTO) {
+        int attempts = 0;
+        while (attempts < MAX_RETRIES) {
+            try {
+                String url = iotBaseUrl + "/devices";
+                String token = getAccessToken();
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setBearerAuth(token);
+                headers.setContentType(MediaType.APPLICATION_JSON);
+
+                HttpEntity<DeviceDTO> entity = new HttpEntity<>(deviceDTO, headers);
+                ResponseEntity<DeviceDTO> response = restTemplate.postForEntity(url, entity, DeviceDTO.class);
+
+                log.info("✅ Device registered at IoT API: {}", response.getBody());
+                return response.getBody();
+
+            } catch (HttpClientErrorException.Unauthorized e) {
+                attempts++;
+                log.warn("401 from IoT API - refreshing token...");
+                refreshAccessToken();
+            } catch (Exception e) {
+                attempts++;
+                log.error("❌ Registration attempt {} failed: {}", attempts, e.getMessage());
+            }
+        }
+        throw new RuntimeException("Failed to register device after retries");
     }
 
     @Override
-    public void login() {
-        try {
-            String loginUrl = baseUrl + "/auth/login";
+    public DeviceDTO[] getAllDevices() {
+        int attempts = 0;
+        while (attempts < MAX_RETRIES) {
+            try {
+                String url = iotBaseUrl + "/devices";
+                String token = getAccessToken();
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setBearerAuth(token);
+                HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-            Map<String, String> credentials = new HashMap<>();
-            credentials.put("username", username);
-            credentials.put("password", password);
+                ResponseEntity<DeviceDTO[]> response = restTemplate.exchange(
+                        url, HttpMethod.GET, entity, DeviceDTO[].class);
+                return response.getBody();
 
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(credentials, headers);
-
-            ResponseEntity<Map> response = restTemplate.postForEntity(loginUrl, request, Map.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                this.cachedToken = (String) response.getBody().get("token");
-                log.info("Successfully authenticated with External IoT API");
+            } catch (HttpClientErrorException.Unauthorized e) {
+                attempts++;
+                refreshAccessToken();
+            } catch (Exception e) {
+                attempts++;
+                log.error("❌ Fetch attempt failed: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to login to External API: {}", e.getMessage());
         }
+        return new DeviceDTO[0];
     }
+
+    // ================= LOCAL AUTH OPERATIONS =================
 
     @Override
     public String getAccessToken() {
-        return this.cachedToken;
+        if (accessToken == null) {
+            login();
+        }
+        return accessToken;
+    }
+
+    private void login() {
+        String loginUrl = authBaseUrl + "/login";
+        Map<String, String> request = new HashMap<>();
+
+        // ✅ FIX: Use LOCAL auth credentials, not IoT credentials
+        request.put("username", authUsername);
+        request.put("password", authPassword);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
+
+        try {
+            log.info("Logging into Local Auth Service: {}", loginUrl);
+            ResponseEntity<Map> response = restTemplate.postForEntity(loginUrl, entity, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                Map<String, String> tokenData = (Map<String, String>) body.get("data");
+
+                this.accessToken = tokenData.get("accessToken");
+                this.refreshToken = tokenData.get("refreshToken");
+                log.info("✅ Login Success.");
+            }
+        } catch (Exception e) {
+            log.error("❌ Auth Failed: {}", e.getMessage());
+            throw new RuntimeException("Could not authenticate with Local Auth Service");
+        }
     }
 
     @Override
     public void refreshAccessToken() {
-        login();
-    }
+        String refreshUrl = authBaseUrl + "/refresh";
+        Map<String, String> request = new HashMap<>();
+        request.put("refreshToken", refreshToken);
 
-    @Override
-    public SensorTelemetryDTO fetchTelemetryFromExternal(String deviceId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
+
         try {
-            String url = baseUrl + "/telemetry/" + deviceId;
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(getAccessToken());
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-            ResponseEntity<SensorTelemetryDTO> response = restTemplate.exchange(url, HttpMethod.GET, entity, SensorTelemetryDTO.class);
-
-            if (response.getBody() != null) {
-                latestReadings.put(deviceId, response.getBody());
-                return response.getBody();
+            ResponseEntity<Map> response = restTemplate.postForEntity(refreshUrl, entity, Map.class);
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                Map<String, String> tokenData = (Map<String, String>) body.get("data");
+                this.accessToken = tokenData.get("accessToken");
+                log.info("🔄 Token refreshed.");
             }
         } catch (Exception e) {
-            log.error("Error fetching telemetry for device {}: {}", deviceId, e.getMessage());
-            if (e.getMessage().contains("401")) refreshAccessToken();
+            log.warn("Refresh failed, re-logging...");
+            login();
         }
-        return null;
-    }
-
-    public SensorTelemetryDTO getLatestLocalData(String deviceId) {
-        return latestReadings.get(deviceId);
-    }
-
-    @Override
-    public DeviceDTO registerDeviceAtExternalApi(DeviceDTO deviceDTO) {
-        return null;
     }
 }

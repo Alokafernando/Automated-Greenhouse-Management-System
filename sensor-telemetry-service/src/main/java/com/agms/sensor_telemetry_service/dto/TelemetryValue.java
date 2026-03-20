@@ -3,15 +3,13 @@ package com.agms.sensor_telemetry_service.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.Instant;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class SensorTelemetryDTO {
-    private String deviceId;
-    private String zoneId;
-    private TelemetryValue value;
-    private String capturedAt;
+public class TelemetryValue {
+    private double temperature;
+    private String tempUnit;
+    private double humidity;
+    private String humidityUnit;
 }
-

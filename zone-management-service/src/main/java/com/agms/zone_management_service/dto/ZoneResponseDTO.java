@@ -1,18 +1,18 @@
-package com.agms.sensor_telemetry_service.dto;
+package com.agms.zone_management_service.dto;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
+@Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ZoneDTO {
+public class ZoneResponseDTO {
     private Long id;
     private String name;
     private double minTemp;
     private double maxTemp;
+    private double minHumidity;   // ✅ add
+    private double maxHumidity;
     private String deviceId;
 }

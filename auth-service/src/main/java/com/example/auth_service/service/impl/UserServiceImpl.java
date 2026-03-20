@@ -8,8 +8,10 @@ import com.example.auth_service.service.UserService;
 import com.example.auth_service.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,26 +48,33 @@ public class UserServiceImpl implements UserService {
     @Override
     public Map<String, String> login(UserDTO userDTO) {
         User user = userRepository.findByUsername(userDTO.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "User not found"));
 
-        if (passwordEncoder.matches(userDTO.getPassword(), user.getPassword())) {
-            Map<String, String> tokens = new HashMap<>();
-            tokens.put("accessToken", jwtUtil.generateAccessToken(user.getUsername()));
-            tokens.put("refreshToken", jwtUtil.generateRefreshToken(user.getUsername()));
-            return tokens;
-        } else {
-            throw new RuntimeException("Invalid credentials");
+        if (!passwordEncoder.matches(userDTO.getPassword(), user.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
+
+        Map<String, String> tokens = new HashMap<>();
+        tokens.put("accessToken", jwtUtil.generateAccessToken(user.getUsername()));
+        tokens.put("refreshToken", jwtUtil.generateRefreshToken(user.getUsername()));
+
+        return tokens;
     }
 
 
     @Override
     public String refreshAccessToken(String refreshToken) {
-        if (jwtUtil.validateToken(refreshToken)) {
+        try {
+            if (!jwtUtil.validateToken(refreshToken)) {
+                throw new IllegalArgumentException("Invalid or expired refresh token");
+            }
+
             String username = jwtUtil.getUsernameFromToken(refreshToken);
             return jwtUtil.generateAccessToken(username);
-        } else {
-            throw new RuntimeException("Invalid refresh token");
+
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid or expired refresh token");
         }
     }
 

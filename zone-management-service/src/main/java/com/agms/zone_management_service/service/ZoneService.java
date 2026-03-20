@@ -1,20 +1,19 @@
 package com.agms.zone_management_service.service;
 
 import com.agms.zone_management_service.dto.ZoneDTO;
-import com.agms.zone_management_service.entity.Zone;
+import com.agms.zone_management_service.dto.ZoneResponseDTO;
 
 import java.util.List;
 
 public interface ZoneService {
 
-    Zone createZone(ZoneDTO zoneRequestDTO);
+    ZoneResponseDTO createZone(ZoneDTO dto);
 
-    Zone getZoneById(Long id);
+    ZoneResponseDTO getZone(Long id);
 
-    Zone updateZone(Long id, ZoneDTO zoneRequestDTO);
+    ZoneResponseDTO updateZone(Long id, ZoneDTO dto);
 
     void deleteZone(Long id);
 
-    List<ZoneDTO> findAll();
-
+    List<ZoneResponseDTO> getAllZones();
 }

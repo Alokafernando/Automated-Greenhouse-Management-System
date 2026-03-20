@@ -9,5 +9,5 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface AutomationClient {
     
     @PostMapping("/api/automation/process")
-    void processTelemetry(@RequestBody SensorTelemetryDTO data);
+    void sendToAutomation(@RequestBody SensorTelemetryDTO data);
 }
