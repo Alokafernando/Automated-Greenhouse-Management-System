@@ -34,7 +34,6 @@ public class SensorServiceImpl implements SensorService {
 
     private static final int MAX_RETRIES = 3;
 
-    // ================= EXTERNAL IOT OPERATIONS =================
 
     @Override
     public DeviceDTO registerDeviceAtExternalApi(DeviceDTO deviceDTO) {
@@ -58,7 +57,7 @@ public class SensorServiceImpl implements SensorService {
             } catch (HttpClientErrorException.Unauthorized e) {
                 attempts++;
                 log.warn("401 from IoT API - refreshing token...");
-                accessToken = null; // force re-login
+                accessToken = null;
                 refreshAccessToken();
             } catch (Exception e) {
                 attempts++;
@@ -96,7 +95,6 @@ public class SensorServiceImpl implements SensorService {
         return new DeviceDTO[0];
     }
 
-    // ================= IOT AUTH OPERATIONS =================
 
     @Override
     public String getAccessToken() {
@@ -107,14 +105,11 @@ public class SensorServiceImpl implements SensorService {
     }
 
     private void login() {
-        // ✅ FIX: Login to IoT API directly — NOT local auth service
-        // IoT API returns flat JSON: {"accessToken":"...", "refreshToken":"..."}
-        // Local auth returns nested: {"data": {"accessToken":"..."}}
         String loginUrl = iotBaseUrl + "/auth/login";
 
         Map<String, String> request = new HashMap<>();
-        request.put("username", iotUsername);  // buddhika
-        request.put("password", iotPassword);  // 1234
+        request.put("username", iotUsername);
+        request.put("password", iotPassword);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -127,7 +122,6 @@ public class SensorServiceImpl implements SensorService {
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
 
-                // ✅ IoT API returns flat — no "data" wrapper
                 this.accessToken = (String) body.get("accessToken");
                 this.refreshToken = (String) body.get("refreshToken");
 
@@ -141,7 +135,6 @@ public class SensorServiceImpl implements SensorService {
 
     @Override
     public void refreshAccessToken() {
-        // ✅ FIX: Refresh via IoT API
         String refreshUrl = iotBaseUrl + "/auth/refresh";
 
         Map<String, String> request = new HashMap<>();

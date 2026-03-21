@@ -37,13 +37,11 @@ public class SensorFetcher {
     @Value("${external.iot.base-url}")
     private String baseUrl;
 
-    // ✅ FIX: Direct URL — Feign/Eureka load balancer failing in Docker setup
     @Value("${zone.service.base-url}")
     private String zoneServiceUrl;
 
     @Scheduled(fixedRate = 10000)
     public void fetch() {
-        // ✅ FIX: Use RestTemplate directly instead of ZoneClient Feign
         List<ZoneDTO> zones;
         try {
             ResponseEntity<ZoneDTO[]> response = restTemplate.getForEntity(

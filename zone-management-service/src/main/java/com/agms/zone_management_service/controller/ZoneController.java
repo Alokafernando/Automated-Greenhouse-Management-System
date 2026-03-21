@@ -18,7 +18,6 @@ public class ZoneController {
 
     @PostMapping
     public ZoneResponseDTO create(@RequestBody ZoneDTO dto) {
-        // FIX: Return ZoneResponseDTO (not Zone entity) so deviceId is always serialized
         return service.createZone(dto);
     }
 

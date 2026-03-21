@@ -27,7 +27,7 @@ public class JwtUtil {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    private static final long ACCESS_TOKEN_VALIDITY = 1000 * 60 * 60 * 10; // 10 hours
+    private static final long ACCESS_TOKEN_VALIDITY = 1000 * 60 * 30; // 30 minutes
     private static final long REFRESH_TOKEN_VALIDITY = 1000 * 60 * 60 * 24 * 7; // 7 days
 
     public String generateAccessToken(String username) {

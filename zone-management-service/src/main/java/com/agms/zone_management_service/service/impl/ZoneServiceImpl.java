@@ -50,8 +50,6 @@ public class ZoneServiceImpl implements ZoneService {
             throw new RuntimeException("Invalid temperature range: minTemp must be less than maxTemp");
         }
 
-        // ✅ TEMPORARY: IoT API auth is broken (returns 500 on /auth/login)
-        // Accept deviceId directly in the request body instead
         if (dto.getDeviceId() == null || dto.getDeviceId().isBlank()) {
             throw new RuntimeException("deviceId is required (IoT API unavailable)");
         }
@@ -60,8 +58,8 @@ public class ZoneServiceImpl implements ZoneService {
                 .name(dto.getName())
                 .minTemp(dto.getMinTemp())
                 .maxTemp(dto.getMaxTemp())
-                .minHumidity(dto.getMinHumidity())   // ✅ add
-                .maxHumidity(dto.getMaxHumidity())   // ✅ add
+                .minHumidity(dto.getMinHumidity())
+                .maxHumidity(dto.getMaxHumidity())
                 .deviceId(dto.getDeviceId())
                 .build();
 
@@ -110,12 +108,10 @@ public class ZoneServiceImpl implements ZoneService {
                 .collect(Collectors.toList());
     }
 
-    // ✅ Gets token from EXTERNAL IoT API — used for device registration
     private String getIoTToken() {
         return fetchToken(baseUrl + "/auth/login", iotUsername, iotPassword);
     }
 
-    // ✅ Gets token from LOCAL auth service — available if needed for local ops
     private String getLocalToken() {
         return fetchToken(authBaseUrl + "/auth/login", "root", "1234");
     }
@@ -165,7 +161,7 @@ public class ZoneServiceImpl implements ZoneService {
                 zone.getName(),
                 zone.getMinTemp(),
                 zone.getMaxTemp(),
-                zone.getMinHumidity(),   // ✅ add
+                zone.getMinHumidity(),
                 zone.getMaxHumidity(),
                 zone.getDeviceId()
         );

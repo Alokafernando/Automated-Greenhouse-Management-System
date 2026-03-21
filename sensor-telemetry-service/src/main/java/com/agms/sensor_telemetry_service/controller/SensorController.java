@@ -15,7 +15,6 @@ public class SensorController {
 
     private final SensorService sensorService;
 
-    // FIX: Inject the dedicated store component instead of managing state here
     private final SensorReadingStore sensorReadingStore;
 
     public SensorController(SensorService sensorService, SensorReadingStore sensorReadingStore) {

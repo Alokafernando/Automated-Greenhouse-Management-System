@@ -26,7 +26,6 @@ public class AutomationServiceImpl implements AutomationService {
     public ActionResponseDTO evaluateTelemetry(SensorDataDTO data) {
         log.info("Processing data for Sensor: {} in Zone: {}", data.getSensorId(), data.getZoneId());
 
-        // Using the getZoneById method from your updated ZoneClient
         ZoneThresholdDTO thresholds = zoneClient.getZoneById(data.getZoneId());
 
         ActionResponseDTO response = new ActionResponseDTO();

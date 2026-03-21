@@ -7,7 +7,7 @@ public class ZoneDTO {
     private String name;
     private double minTemp;
     private double maxTemp;
-    private double minHumidity;   // ✅ add
+    private double minHumidity;
     private double maxHumidity;
     private String deviceId;
 }

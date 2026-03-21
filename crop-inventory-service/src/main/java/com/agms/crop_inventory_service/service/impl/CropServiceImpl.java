@@ -61,7 +61,7 @@ public class CropServiceImpl implements CropService {
         return switch (current) {
             case SEEDLING -> next == CropStatus.VEGETATIVE;
             case VEGETATIVE -> next == CropStatus.HARVESTED;
-            case HARVESTED -> false; // Final state
+            case HARVESTED -> false;
         };
     }
 }

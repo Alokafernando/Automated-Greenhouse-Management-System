@@ -5,7 +5,7 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@FeignClient(name = "automation-service") // Discovered via Eureka
+@FeignClient(name = "automation-service")
 public interface AutomationClient {
     
     @PostMapping("/api/automation/process")
