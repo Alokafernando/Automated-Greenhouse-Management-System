@@ -20,26 +20,14 @@ public class SensorServiceImpl implements SensorService {
     @Autowired
     private RestTemplate restTemplate;
 
-    // ── External IoT API ──────────────────────────────
     @Value("${external.iot.base-url}")
     private String iotBaseUrl;
 
     @Value("${external.iot.username}")
-    private String iotUsername;        // buddhika
+    private String iotUsername;
 
     @Value("${external.iot.password}")
-    private String iotPassword;        // 1234
-
-    // ── Local Auth Service ────────────────────────────
-    @Value("${auth.service.base-url}")
-    private String authBaseUrl;
-
-    // ✅ FIX: Separate credentials for local auth service
-    @Value("${auth.service.username}")
-    private String authUsername;       // buddhika (local)
-
-    @Value("${auth.service.password}")
-    private String authPassword;       // 1234 (local)
+    private String iotPassword;
 
     private String accessToken;
     private String refreshToken;
@@ -61,7 +49,8 @@ public class SensorServiceImpl implements SensorService {
                 headers.setContentType(MediaType.APPLICATION_JSON);
 
                 HttpEntity<DeviceDTO> entity = new HttpEntity<>(deviceDTO, headers);
-                ResponseEntity<DeviceDTO> response = restTemplate.postForEntity(url, entity, DeviceDTO.class);
+                ResponseEntity<DeviceDTO> response = restTemplate.postForEntity(
+                        url, entity, DeviceDTO.class);
 
                 log.info("✅ Device registered at IoT API: {}", response.getBody());
                 return response.getBody();
@@ -69,6 +58,7 @@ public class SensorServiceImpl implements SensorService {
             } catch (HttpClientErrorException.Unauthorized e) {
                 attempts++;
                 log.warn("401 from IoT API - refreshing token...");
+                accessToken = null; // force re-login
                 refreshAccessToken();
             } catch (Exception e) {
                 attempts++;
@@ -96,6 +86,7 @@ public class SensorServiceImpl implements SensorService {
 
             } catch (HttpClientErrorException.Unauthorized e) {
                 attempts++;
+                accessToken = null;
                 refreshAccessToken();
             } catch (Exception e) {
                 attempts++;
@@ -105,7 +96,7 @@ public class SensorServiceImpl implements SensorService {
         return new DeviceDTO[0];
     }
 
-    // ================= LOCAL AUTH OPERATIONS =================
+    // ================= IOT AUTH OPERATIONS =================
 
     @Override
     public String getAccessToken() {
@@ -116,38 +107,43 @@ public class SensorServiceImpl implements SensorService {
     }
 
     private void login() {
-        String loginUrl = authBaseUrl + "/login";
-        Map<String, String> request = new HashMap<>();
+        // ✅ FIX: Login to IoT API directly — NOT local auth service
+        // IoT API returns flat JSON: {"accessToken":"...", "refreshToken":"..."}
+        // Local auth returns nested: {"data": {"accessToken":"..."}}
+        String loginUrl = iotBaseUrl + "/auth/login";
 
-        // ✅ FIX: Use LOCAL auth credentials, not IoT credentials
-        request.put("username", authUsername);
-        request.put("password", authPassword);
+        Map<String, String> request = new HashMap<>();
+        request.put("username", iotUsername);  // buddhika
+        request.put("password", iotPassword);  // 1234
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
 
         try {
-            log.info("Logging into Local Auth Service: {}", loginUrl);
+            log.info("🔐 Logging into IoT API: {}", loginUrl);
             ResponseEntity<Map> response = restTemplate.postForEntity(loginUrl, entity, Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                Map<String, String> tokenData = (Map<String, String>) body.get("data");
 
-                this.accessToken = tokenData.get("accessToken");
-                this.refreshToken = tokenData.get("refreshToken");
-                log.info("✅ Login Success.");
+                // ✅ IoT API returns flat — no "data" wrapper
+                this.accessToken = (String) body.get("accessToken");
+                this.refreshToken = (String) body.get("refreshToken");
+
+                log.info("✅ IoT Login Success.");
             }
         } catch (Exception e) {
-            log.error("❌ Auth Failed: {}", e.getMessage());
-            throw new RuntimeException("Could not authenticate with Local Auth Service");
+            log.error("❌ IoT Auth Failed: {}", e.getMessage());
+            throw new RuntimeException("Could not authenticate with IoT API: " + e.getMessage());
         }
     }
 
     @Override
     public void refreshAccessToken() {
-        String refreshUrl = authBaseUrl + "/refresh";
+        // ✅ FIX: Refresh via IoT API
+        String refreshUrl = iotBaseUrl + "/auth/refresh";
+
         Map<String, String> request = new HashMap<>();
         request.put("refreshToken", refreshToken);
 
@@ -159,12 +155,11 @@ public class SensorServiceImpl implements SensorService {
             ResponseEntity<Map> response = restTemplate.postForEntity(refreshUrl, entity, Map.class);
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                Map<String, String> tokenData = (Map<String, String>) body.get("data");
-                this.accessToken = tokenData.get("accessToken");
-                log.info("🔄 Token refreshed.");
+                this.accessToken = (String) body.get("accessToken");
+                log.info("🔄 IoT Token refreshed.");
             }
         } catch (Exception e) {
-            log.warn("Refresh failed, re-logging...");
+            log.warn("Refresh failed, re-logging into IoT API...");
             login();
         }
     }
